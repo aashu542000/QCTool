@@ -1,0 +1,152 @@
+<div class="app-container">
+    <div class="qc-workspace">
+        <div class="modal-header">
+            <div class="quality-score-display">
+                <div class="score-number"
+                    [style.color]="currentCase.score >= 90 ? '#22c55e' : currentCase.score >= 75 ? '#eab308' : currentCase.score >= 60 ? '#f97316' : '#ef4444'">
+                    {{ displayScore }}%
+                </div>
+                <div class="score-label">
+                    {{ currentCase.score >= 90 ? 'Excellent' : currentCase.score >= 75 ? 'Good' : currentCase.score >=
+                    60 ? 'Fair' : 'Poor' }}
+                </div>
+            </div>
+            <div class="header-field">
+                <label>Patient ID & Name</label>
+                <input type="text" [(ngModel)]="currentCase.patientName">
+            </div>
+            <div class="header-field">
+                <label>Case ID</label>
+                <input type="text" [(ngModel)]="currentCase.caseId">
+            </div>
+            <div class="header-field">
+                <!-- <label>iModify Viewer URL</label>
+                <input type="text" [(ngModel)]="currentCase.imodifyUrl"> -->
+            </div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab" *ngFor="let key of objectKeys(caseService.issuesData)"
+                [class.active]="currentTab === key" (click)="switchTab(key)">
+                {{ caseService.issuesData[key].category_name }}
+            </button>
+        </div>
+
+        <div class="modal-body">
+            <!-- Viewer Panel -->
+            <div class="viewer-panel">
+                <div class="viewer-header">
+                    <h4>iModify Viewer</h4>
+                    <!-- Simple iframe loading logic for now -->
+                    <button class="btn btn-primary btn-sm" (click)="loadViewer()">Load Viewer</button>
+                </div>
+                <div class="viewer-container">
+                    <iframe *ngIf="currentCase.imodifyUrl" [src]="viewerSafeUrl" allowfullscreen
+                        style="width:100%; height:100%; border:none;"></iframe>
+                    <div *ngIf="!currentCase.imodifyUrl" class="viewer-placeholder">Paste iModify URL above and click
+                        "Load Viewer"</div>
+                </div>
+            </div>
+
+            <!-- Issues List -->
+            <div class="issues-list">
+                <div class="issue-item" *ngFor="let issue of getIssuesForCategory(currentTab)">
+                    <input type="checkbox" [checked]="currentCase.issuesMarked.includes(issue.id)"
+                        (change)="toggleIssue(issue.id)">
+                    <div class="issue-content">
+                        <div class="issue-label">
+                            <span>{{ issue.label }}</span>
+                            <span class="deduction">-{{ issue.deduction }}</span>
+                        </div>
+                        <div *ngIf="issue.sub_issues && currentCase.issuesMarked.includes(issue.id)"
+                            class="sub-issues active">
+                            <div class="sub-issue-item" *ngFor="let sub of issue.sub_issues">
+                                <input type="checkbox" [checked]="currentCase.subIssuesMarked[issue.id]?.includes(sub)"
+                                    (change)="toggleSubIssue(issue.id, sub)">
+                                <span>{{ sub }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel -->
+            <div class="right-panel">
+                <div class="issues-panel">
+                    <h4>⊘ {{ currentCase.issuesMarked.length }} Issues Identified</h4>
+                    <ul>
+                        <li *ngIf="currentCase.issuesMarked.length === 0" style="color: var(--color-text-secondary);">No
+                            issues marked</li>
+                        <li *ngFor="let issue of getIdentifiedIssues()">
+                            • {{ issue.label }} (-{{ issue.deduction }})
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="suggestions-panel">
+                    <h4>💡 Suggestions</h4>
+                    <ul>
+                        <li *ngIf="currentCase.issuesMarked.length === 0">Mark issues to see suggestions</li>
+                        <li *ngFor="let s of getSuggestions()">{{ s }}</li>
+                    </ul>
+                </div>
+
+                <div class="remarks-section">
+                    <h4>Remarks & Notes</h4>
+                    <textarea [(ngModel)]="currentCase.remarks"
+                        placeholder="Enter clinical notes and observations..."></textarea>
+                </div>
+
+                <div class="voice-section">
+                    <h4>🎤 Voice Note</h4>
+                    <div class="voice-controls">
+                        <button [class.recording]="isRecording" (click)="toggleRecording()">
+                            {{ isRecording ? 'Stop' : 'Record' }}
+                        </button>
+                        <span>{{ recordingTime }}</span>
+                    </div>
+                    <div class="voice-notes-list">
+                        <div class="voice-note-item" *ngFor="let note of currentCase.voiceNotes; let i = index">
+                            <audio controls [src]="note.data"></audio>
+                            <button class="icon-btn" (click)="deleteVoiceNote(i)">🗑️</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="screenshots-section">
+                    <h4>📸 Screenshots & Screen Recording</h4>
+                    <div class="media-buttons">
+                        <button class="btn btn-secondary btn-sm" (click)="captureScreenshot()">📸 Capture
+                            Screenshot</button>
+                        <button class="btn btn-secondary btn-sm" [style.background]="isScreenRecording ? '#ef4444' : ''"
+                            (click)="toggleScreenRecording()">
+                            {{ isScreenRecording ? '⏹️ Stop Recording' : '🎥 Record Screen' }}
+                        </button>
+                        <span *ngIf="isScreenRecording" style="color: #ef4444; font-weight: 600;">{{ screenRecordingTime
+                            }}</span>
+                    </div>
+
+                    <input type="file" (change)="handleFileInput($event)" accept="image/*,video/*" multiple
+                        style="margin-top: 10px;">
+
+                    <div class="screenshots-grid" style="margin-top: 12px;">
+                        <div class="screenshot-item media-item"
+                            *ngFor="let media of currentCase.screenshots; let i = index">
+                            <video *ngIf="media.type === 'video'" [src]="media.data" controls
+                                style="width:100%; height:150px; object-fit:cover;"></video>
+                            <img *ngIf="media.type !== 'video'" [src]="media.data"
+                                style="width:100%; height:150px; object-fit:cover;">
+                            <button class="delete-btn" (click)="deleteScreenshot(i)">×</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal-footer">
+            <button class="btn btn-secondary" (click)="onCancel()">Reset</button>
+            <button class="btn btn-secondary" (click)="saveDraft()">Save Draft</button>
+            <button class="btn btn-primary" (click)="completeQc()">Complete QC</button>
+        </div>
+    </div>
+</div>

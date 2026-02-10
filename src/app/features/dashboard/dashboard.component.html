@@ -1,0 +1,86 @@
+<div class="app-container">
+    <div class="header">
+        <h1>inKD QC Tool</h1>
+        <p>Aligner treatment plan quality control for orthodontists.</p>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <h3>Total Cases</h3>
+            <div class="value">{{ totalCases }}</div>
+        </div>
+        <div class="stat-card">
+            <h3>Avg Quality Score</h3>
+            <div class="value">{{ avgScore }}%</div>
+        </div>
+        <div class="stat-card">
+            <h3>Today's Reviews</h3>
+            <div class="value">{{ todayReviews }}</div>
+        </div>
+        <div class="stat-card">
+            <h3>Selected</h3>
+            <div class="value">{{ selectedCases.size }}</div>
+        </div>
+    </div>
+
+    <div class="action-bar">
+        <input type="text" class="search-box" [(ngModel)]="searchTerm" (input)="filterCases()"
+            placeholder="Search patients or IDs...">
+        <!-- Import buttons can be implemented later or now -->
+        <!-- <button class="btn btn-secondary">📥 Import</button> -->
+        <button class="btn btn-secondary" (click)="exportJSON()">📦 Export JSON</button>
+        <button class="btn btn-secondary" (click)="exportCSV()">📊 Export CSV</button>
+        <button class="btn btn-primary" (click)="onNewQc()">+ New QC</button>
+    </div>
+
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th><input type="checkbox" (change)="toggleSelectAll($event)"></th>
+                    <th>Patient Name</th>
+                    <th>Case ID</th>
+                    <th>Date</th>
+                    <th>Quality Score</th>
+                    <th>Status</th>
+                    <th>Assets</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr *ngIf="filteredCases.length === 0">
+                    <td colspan="8" class="empty-state">
+                        <div class="empty-state-icon">📋</div>
+                        No cases match.
+                    </td>
+                </tr>
+                <tr *ngFor="let c of filteredCases" (click)="onEditCase(c)">
+                    <td (click)="$event.stopPropagation()">
+                        <input type="checkbox" [checked]="selectedCases.has(c.id)" (change)="toggleCaseSelection(c.id)">
+                    </td>
+                    <td>{{ c.patientName }}</td>
+                    <td>{{ c.caseId }}</td>
+                    <td>{{ c.date }}</td>
+                    <td>
+                        <span class="score-badge" [class.score-excellent]="c.score >= 90"
+                            [class.score-good]="c.score >= 75 && c.score < 90"
+                            [class.score-fair]="c.score >= 60 && c.score < 75" [class.score-poor]="c.score < 60">
+                            {{ c.score }}%
+                        </span>
+                    </td>
+                    <td>
+                        <span class="status-badge" [class.status-completed]="c.status === 'Completed'"
+                            [class.status-progress]="c.status === 'In Progress'"
+                            [class.status-draft]="c.status === 'Draft'">
+                            {{ c.status }}
+                        </span>
+                    </td>
+                    <td>🎤 {{ c.voiceNotes?.length || 0 }} 📸 {{ c.screenshots?.length || 0 }}</td>
+                    <td (click)="$event.stopPropagation()">
+                        <button class="icon-btn" (click)="deleteCase(c.id, $event)">🗑️</button>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
