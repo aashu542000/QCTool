@@ -38,7 +38,7 @@
                 <div class="viewer-header">
                     <h4>iModify Viewer</h4>
                     <!-- Simple iframe loading logic for now -->
-                    <button class="btn btn-primary btn-sm" (click)="loadViewer()">Load Viewer</button>
+                    <!-- <button class="btn btn-primary btn-sm" (click)="loadViewer()">Load Viewer</button> -->
                 </div>
                 <div class="viewer-container">
                     <iframe *ngIf="currentCase.imodifyUrl" [src]="viewerSafeUrl" allowfullscreen
@@ -140,12 +140,44 @@
                         </div>
                     </div>
                 </div>
+
+                <div class="uploaded-files-section" *ngIf="!currentCase.imodifyUrl"
+                    style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #e1e4e8;">
+                    <h4>📂 Received Files (FileCollection)</h4>
+
+                    <div *ngIf="!currentCase.uploadedFiles || currentCase.uploadedFiles.length === 0"
+                        style="color: #666; font-style: italic;">
+                        No uploaded files found.
+                    </div>
+
+                    <div class="uploaded-files-list" style="margin-top: 10px;">
+                        <div class="file-item" *ngFor="let file of currentCase.uploadedFiles"
+                            style="margin-bottom: 8px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; display: flex; align-items: center; justify-content: space-between;">
+                            <div class="file-info" style="display: flex; align-items: center; gap: 10px;">
+                                <span style="font-size: 1.2em;">
+                                    {{ file.fileType === 'audio' ? '🎤' : file.fileType === 'video' ? '🎥' : '🖼️' }}
+                                </span>
+                                <a [href]="file.url" target="_blank"
+                                    style="color: #2563eb; text-decoration: none; font-weight: 500;">
+                                    {{ file.filename || 'View File' }}
+                                </a>
+                                <span style="font-size: 0.85em; color: #666;">({{ (file.fileType || 'unknown') |
+                                    titlecase }})</span>
+                            </div>
+
+                            <!-- Inline Preview for Audio -->
+                            <audio *ngIf="file.fileType === 'audio'" [src]="file.url" controls
+                                style="height: 30px;"></audio>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
         <div class="modal-footer">
             <button class="btn btn-secondary" (click)="onCancel()">Reset</button>
-            <button class="btn btn-secondary" (click)="saveDraft()">Save Draft</button>
+            <button class="btn btn-success" (click)="saveDraft()"
+                style="background-color: #22c55e; border-color: #22c55e; color: white;">Save Draft</button>
             <button class="btn btn-primary" (click)="completeQc()">Complete QC</button>
         </div>
     </div>

@@ -68,20 +68,23 @@ export class QcModalComponent implements OnInit, OnDestroy {
 
 
     resetForm() {
+        const current = this.currentCase || {};
+
         this.currentCase = {
             id: Date.now(),
-            patientName: '',
-            caseId: '',
+            patientName: current.patientName || '',
+            caseId: current.caseId || '',
             date: new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }),
             score: 100,
             status: 'Draft',
             affectedTeeth: '',
-            imodifyUrl: 'https://3dviewer.illusionaligners.com/index.html?mlink=https://3dviewer.illusionaligners.com/Client4758/IA-5-29087/CE284CB44D2E4D858F5CEF8C3DC59070.iiwgl&fg=f00&bg=fff&p=IOOHJK',
+            imodifyUrl: current.imodifyUrl || 'https://3dviewer.illusionaligners.com/index.html?mlink=https://3dviewer.illusionaligners.com/Client4758/IA-5-29087/CE284CB44D2E4D858F5CEF8C3DC59070.iiwgl&fg=f00&bg=fff&p=IOOHJK',
             issuesMarked: [],
             subIssuesMarked: {},
             remarks: '',
             voiceNotes: [],
-            screenshots: []
+            screenshots: [],
+            uploadedFiles: current.uploadedFiles || []
         };
         this.viewerSafeUrl = undefined;
         this.displayScore = 100;
@@ -733,6 +736,83 @@ export class QcModalComponent implements OnInit, OnDestroy {
         // Scan the entire payload recursively
         processObject(payload);
 
+        // 3. Bind FileCollections (Audio, Video, Image)
+        // Check for 'FileCollection' (singular) as per user JSON or 'FileCollections' (plural) as per generation
+        // Also handle lowercase variants just in case
+        const files = payload.FileCollection || payload.FileCollections || payload.fileCollection || payload.fileCollections;
+        console.log('Files Binding - Found:', files);
+
+        // Always initialize arrays to ensure we start clean or overwrite
+        // Since resetForm() was called earlier, they are likely empty, but let's be explicit
+        const newVoiceNotes: any[] = [];
+        const newScreenshots: any[] = [];
+
+        if (files && Array.isArray(files)) {
+            files.forEach((file: any) => {
+                let rawType = file.FileType || file.fileType || file.filetype || '';
+                let fileType = String(rawType).toLowerCase();
+
+                const filePath = file.FilePath || file.filePath || file.filepath || file.Url || file.url || '';
+
+                console.log(`Processing file: Type=${fileType}, Path=${filePath}`);
+
+                if (!filePath) return;
+
+                // Fallback: Infer type from extension
+                if (!fileType || fileType === 'undefined' || fileType === 'null' || fileType === '') {
+                    const ext = filePath.split('.').pop()?.toLowerCase();
+                    if (ext) {
+                        if (['wav', 'mp3', 'ogg', 'm4a'].includes(ext)) fileType = 'audio';
+                        else if (['png', 'jpg', 'jpeg', 'gif', 'bmp'].includes(ext)) fileType = 'image';
+                        else if (['mp4', 'webm', 'mov'].includes(ext)) fileType = 'video';
+                        console.log(`Inferred type from extension .${ext}: ${fileType}`);
+                    }
+                }
+
+                if (fileType.includes('audio')) {
+                    newVoiceNotes.push({
+                        id: Date.now() + Math.random(),
+                        data: filePath, // Remote URL
+                        url: filePath,
+                        timestamp: new Date().toISOString(),
+                        uploading: false,
+                        isRemote: true
+                    });
+                } else if (fileType.includes('image') || fileType.includes('video')) {
+                    newScreenshots.push({
+                        id: Date.now() + Math.random(),
+                        type: fileType.includes('video') ? 'video' : 'image',
+                        data: filePath, // Remote URL
+                        url: filePath,
+                        filename: filePath.split('/').pop() || 'file',
+                        timestamp: new Date().toISOString(),
+                        uploading: false,
+                        isRemote: true
+                    });
+                }
+            });
+
+            // Reassign arrays to force change detection
+            if (newVoiceNotes.length > 0) {
+                // Since resetForm() was called, currentCase.voiceNotes is empty.
+                this.currentCase.voiceNotes = newVoiceNotes;
+                this.latestAudioUrl = newVoiceNotes[newVoiceNotes.length - 1].url;
+            }
+            if (newScreenshots.length > 0) {
+                this.currentCase.screenshots = newScreenshots;
+            }
+
+            // Also populate the global uploadedFiles list for the new section
+            this.currentCase.uploadedFiles = [
+                ...newVoiceNotes.map(n => ({ ...n, fileType: 'audio' })),
+                ...newScreenshots.map(s => ({ ...s, fileType: s.type || 'image' }))
+            ];
+
+            console.log('Final Voice Notes:', this.currentCase.voiceNotes);
+            console.log('Final Screenshots:', this.currentCase.screenshots);
+            console.log('Final Uploaded Files:', this.currentCase.uploadedFiles);
+        }
+
         this.currentCase.score = payload.Percentage !== undefined ? payload.Percentage : this.currentCase.score;
         this.updateScore();
         this.loadViewer(); // Auto-load viewer if URL is present
@@ -778,21 +858,48 @@ export class QcModalComponent implements OnInit, OnDestroy {
             next: (response: any) => {
                 console.log('=== List API Response ===');
                 console.log('Full response:', response);
-                console.log('response.data:', response?.data);
-                console.log('response.data.QCList:', response?.data?.QCList);
 
-                // If API returns null QCData, skip population to preserve existing binding (e.g. from URL)
-                if (response && response.QCData === null) {
-                    console.log('QCData is null, skipping population');
+                // Check for data in various potential locations
+                let dataToPopulate = null;
+
+                // 1. Check inside response.data (Common API wrapper)
+                if (response && response.data) {
+                    if (response.data.QCData && Array.isArray(response.data.QCData) && response.data.QCData.length > 0) {
+                        dataToPopulate = response.data.QCData.find((item: any) => item.ImpressionNo === impressionNo) || response.data.QCData[0];
+                        console.log('Found data in response.data.QCData');
+                    }
+                    else if (response.data.QCList && Array.isArray(response.data.QCList) && response.data.QCList.length > 0) {
+                        dataToPopulate = response.data.QCList.find((item: any) => item.ImpressionNo === impressionNo) || response.data.QCList[0];
+                        console.log('Found data in response.data.QCList');
+                    }
+                    else if (Array.isArray(response.data) && response.data.length > 0) {
+                        dataToPopulate = response.data.find((item: any) => item.ImpressionNo === impressionNo) || response.data[0];
+                        console.log('Found data in response.data (Array)');
+                    }
+                    else if (typeof response.data === 'object') {
+                        // Maybe data itself is the object
+                        // But be careful not to use it if it's just a wrapper without actual fields
+                        if (response.data.ImpressionNo || response.data.FileCollection) {
+                            dataToPopulate = response.data;
+                            console.log('Found data in response.data (Object)');
+                        }
+                    }
                 }
 
-                // If the response is an array, take the first item if matches our ID
-                // common pattern for list APIs that return searchable results
-                let dataToPopulate = null;
-                if (Array.isArray(response)) {
-                    dataToPopulate = response.find(item => item.ImpressionNo === impressionNo) || response[0];
-                } else if (response) {
-                    dataToPopulate = response;
+                // 2. Check Root (Legacy/Direct structure)
+                if (!dataToPopulate) {
+                    if (response.QCData && Array.isArray(response.QCData) && response.QCData.length > 0) {
+                        dataToPopulate = response.QCData.find((item: any) => item.ImpressionNo === impressionNo) || response.QCData[0];
+                        console.log('Found data in response.QCData');
+                    }
+                    else if (Array.isArray(response) && response.length > 0) {
+                        dataToPopulate = response.find((item: any) => item.ImpressionNo === impressionNo) || response[0];
+                        console.log('Found data in response (Array)');
+                    }
+                    else if (response && (response.ImpressionNo || response.FileCollection)) {
+                        dataToPopulate = response;
+                        console.log('Found data in response (Root Object)');
+                    }
                 }
 
                 if (dataToPopulate) {
@@ -804,34 +911,22 @@ export class QcModalComponent implements OnInit, OnDestroy {
                 if (response && response.data && response.data.QCList && Array.isArray(response.data.QCList) && response.data.QCList.length > 0) {
                     const qcItem = response.data.QCList[0];
                     console.log('=== QCList item ===', qcItem);
-                    console.log('PatientID:', qcItem.PatientID);
-                    console.log('Patient:', qcItem.Patient);
-                    console.log('iModifyURL:', qcItem.iModifyURL);
-
-                    // Bind Patient and PatientID to patientName (format: "PatientID - Patient")
+                    // Bind Patient details...
                     if (qcItem.PatientID && qcItem.Patient) {
                         this.currentCase.patientName = `${qcItem.PatientID} - ${qcItem.Patient}`;
-                        console.log('Set patientName (both):', this.currentCase.patientName);
                     } else if (qcItem.PatientID) {
                         this.currentCase.patientName = qcItem.PatientID;
-                        console.log('Set patientName (ID only):', this.currentCase.patientName);
                     } else if (qcItem.Patient) {
                         this.currentCase.patientName = qcItem.Patient;
-                        console.log('Set patientName (name only):', this.currentCase.patientName);
                     }
 
                     // Bind iModifyURL
                     if (qcItem.iModifyURL) {
                         this.currentCase.imodifyUrl = qcItem.iModifyURL;
-                        console.log('Set imodifyUrl:', this.currentCase.imodifyUrl);
                     }
 
-                    console.log('=== Final values ===');
-                    console.log('PatientName:', this.currentCase.patientName);
-                    console.log('iModifyUrl:', this.currentCase.imodifyUrl);
+                    this.loadViewer();
                     this.cdr.detectChanges(); // Trigger UI update
-                } else {
-                    console.log('QCList not found or empty in response.data');
                 }
             },
             error: (err: any) => {
