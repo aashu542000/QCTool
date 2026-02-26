@@ -72,29 +72,30 @@
 
             <!-- Right Panel -->
             <div class="right-panel">
-                <div class="issues-panel">
-                    <h4>⊘ {{ currentCase.issuesMarked.length }} Issues Identified</h4>
-                    <ul>
-                        <li *ngIf="currentCase.issuesMarked.length === 0" style="color: var(--color-text-secondary);">No
-                            issues marked</li>
-                        <li *ngFor="let issue of getIdentifiedIssues()">
-                            • {{ issue.label }} (-{{ issue.deduction }})
-                        </li>
-                    </ul>
-                </div>
+                <div #snapshotTarget id="snapshotTargetId" class="snapshot-container" style="background: white; padding: 10px;">
+        
+                    <div class="issues-panel">
+                        <h4>⊘ {{ currentCase.issuesMarked.length }} Issues Identified</h4>
+                        <ul>
+                            <li *ngIf="currentCase.issuesMarked.length === 0">No issues marked</li>
+                            <li *ngFor="let issue of getIdentifiedIssues()">
+                                • {{ issue.label }} (-{{ issue.deduction }})
+                            </li>
+                        </ul>
+                    </div>
 
-                <div class="suggestions-panel">
-                    <h4>💡 Suggestions</h4>
-                    <ul>
-                        <li *ngIf="currentCase.issuesMarked.length === 0">Mark issues to see suggestions</li>
-                        <li *ngFor="let s of getSuggestions()">{{ s }}</li>
-                    </ul>
-                </div>
-
-                <div class="remarks-section">
-                    <h4>Remarks & Notes</h4>
-                    <textarea [(ngModel)]="currentCase.remarks"
-                        placeholder="Enter clinical notes and observations..."></textarea>
+                    <div class="suggestions-panel">
+                        <h4>💡 Suggestions</h4>
+                        <ul>
+                            <li *ngIf="currentCase.issuesMarked.length === 0">Mark issues to see suggestions</li>
+                            <li *ngFor="let s of getSuggestions()">{{ s }}</li>
+                        </ul>
+                    </div>
+                    <div class="remarks-section">
+                        <h4>Remarks & Notes</h4>
+                        <textarea [(ngModel)]="currentCase.remarks"
+                            placeholder="Enter clinical notes and observations..."></textarea>
+                    </div>
                 </div>
 
                 <div class="voice-section">

@@ -1,10 +1,11 @@
-import { Component, EventEmitter, Input, OnInit, Output, OnDestroy, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ElementRef } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { ActivatedRoute } from '@angular/router';
 import { Case, CaseService } from '../../services/case.service';
+import html2canvas from 'html2canvas'; // Import the library
 
 @Component({
     selector: 'app-qc-modal',
@@ -14,6 +15,7 @@ import { Case, CaseService } from '../../services/case.service';
     styleUrls: ['./qc-modal.component.css']
 })
 export class QcModalComponent implements OnInit, OnDestroy {
+    @ViewChild('snapshotTarget') snapshotTarget!: ElementRef;
     currentCase!: Case;
     currentTab: string = 'treatment_plan';
     objectKeys = Object.keys;
@@ -200,6 +202,7 @@ export class QcModalComponent implements OnInit, OnDestroy {
     }
 
     stopRecording() {
+        this.recordingTime = '0:00';
         if (this.mediaRecorder && this.isRecording) {
             this.mediaRecorder.stop();
             this.isRecording = false;
@@ -541,6 +544,7 @@ export class QcModalComponent implements OnInit, OnDestroy {
             "iModifyUrl": this.currentCase.imodifyUrl || "",
             "VoiceNoteUrl": this.getLatestVoiceNoteUrl(),
             "ScreenRecordingUrl": this.getLatestScreenRecordingUrl(),
+            "SnapshotUrl": this.currentCase.SnapshotUrl || "", 
             "FileCollections": [
                 ...(this.currentCase.voiceNotes || []).filter(n => n.url).map(n => ({
                     FilePath: n.url,
@@ -575,9 +579,12 @@ export class QcModalComponent implements OnInit, OnDestroy {
         return '';
     }
 
-    saveDraft() {
+    async saveDraft() {
         this.currentCase.status = 'Draft';
         this.caseService.saveCase(this.currentCase);
+
+        console.log('Capturing issue snapshot...');
+       await this.capturePanelSnapshot();
 
         const payload = this.generatePayload();
         console.log('Save Draft Payload:', payload);
@@ -859,10 +866,8 @@ export class QcModalComponent implements OnInit, OnDestroy {
                 console.log('=== List API Response ===');
                 console.log('Full response:', response);
 
-                // Check for data in various potential locations
                 let dataToPopulate = null;
 
-                // 1. Check inside response.data (Common API wrapper)
                 if (response && response.data) {
                     if (response.data.QCData && Array.isArray(response.data.QCData) && response.data.QCData.length > 0) {
                         dataToPopulate = response.data.QCData.find((item: any) => item.ImpressionNo === impressionNo) || response.data.QCData[0];
@@ -877,16 +882,12 @@ export class QcModalComponent implements OnInit, OnDestroy {
                         console.log('Found data in response.data (Array)');
                     }
                     else if (typeof response.data === 'object') {
-                        // Maybe data itself is the object
-                        // But be careful not to use it if it's just a wrapper without actual fields
                         if (response.data.ImpressionNo || response.data.FileCollection) {
                             dataToPopulate = response.data;
                             console.log('Found data in response.data (Object)');
                         }
                     }
                 }
-
-                // 2. Check Root (Legacy/Direct structure)
                 if (!dataToPopulate) {
                     if (response.QCData && Array.isArray(response.QCData) && response.QCData.length > 0) {
                         dataToPopulate = response.QCData.find((item: any) => item.ImpressionNo === impressionNo) || response.QCData[0];
@@ -907,11 +908,9 @@ export class QcModalComponent implements OnInit, OnDestroy {
                     console.log('Form populated from API data');
                 }
 
-                // Extract data from QCList if available (do this AFTER populateFromPayload to ensure it takes precedence)
                 if (response && response.data && response.data.QCList && Array.isArray(response.data.QCList) && response.data.QCList.length > 0) {
                     const qcItem = response.data.QCList[0];
                     console.log('=== QCList item ===', qcItem);
-                    // Bind Patient details...
                     if (qcItem.PatientID && qcItem.Patient) {
                         this.currentCase.patientName = `${qcItem.PatientID} - ${qcItem.Patient}`;
                     } else if (qcItem.PatientID) {
@@ -920,13 +919,13 @@ export class QcModalComponent implements OnInit, OnDestroy {
                         this.currentCase.patientName = qcItem.Patient;
                     }
 
-                    // Bind iModifyURL
+                    
                     if (qcItem.iModifyURL) {
                         this.currentCase.imodifyUrl = qcItem.iModifyURL;
                     }
 
                     this.loadViewer();
-                    this.cdr.detectChanges(); // Trigger UI update
+                    this.cdr.detectChanges(); 
                 }
             },
             error: (err: any) => {
@@ -934,4 +933,48 @@ export class QcModalComponent implements OnInit, OnDestroy {
             }
         });
     }
+
+    SnapshotUrl: string | null = null;
+
+   async capturePanelSnapshot(): Promise<string | null> {
+    if (!this.currentAzureCredentials || !this.currentFolderPath) {
+        const res: any = await firstValueFrom(this.caseService.getFolderPath(6));
+        this.handleFolderPathResponse(res);
+    }
+
+    const element = this.snapshotTarget.nativeElement;
+
+    const canvas = await html2canvas(element, {
+        backgroundColor: '#ffffff',
+        scale: 2,
+        height: element.scrollHeight,
+        windowHeight: element.scrollHeight,
+        y: window.scrollY,
+    });
+
+    return new Promise((resolve) => {
+        canvas.toBlob(async (blob) => {
+            if (blob) {
+                const filename = `auto-snapshot-${Date.now()}.png`;
+                try {
+                    // 3. Upload and return ONLY the URL
+                    const url = await this.caseService.uploadToAzureBlob(
+                        blob, 
+                        this.currentFolderPath, 
+                        this.currentAzureCredentials, 
+                        filename
+                    );
+                    this.currentCase.SnapshotUrl = url; // Store it separately
+                    resolve(url);
+                } catch (err) {
+                    console.error('Snapshot upload failed', err);
+                    this.cdr.detectChanges();
+                    resolve(null);
+                }
+            } else {
+                resolve(null);
+            }
+        }, 'image/png');
+    });
+}
 }

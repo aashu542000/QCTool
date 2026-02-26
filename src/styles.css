@@ -542,3 +542,15 @@ tbody tr:hover {
     justify-content: flex-end;
     background: white;
 }
+
+.snapshot-container {
+    background-color: white !important;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+/* Optional: Hide specific buttons inside the snapshot area */
+.snapshot-container .btn {
+    display: none !important; /* This won't show up in the image */
+}

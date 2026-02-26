@@ -16,6 +16,7 @@ export interface Case {
     voiceNotes: any[];
     screenshots: any[];
     uploadedFiles?: any[]; // For FileCollection from API
+    SnapshotUrl?: string | null; // For snapshot URL from API
 }
 
 import { HttpClient } from '@angular/common/http';

@@ -47,10 +47,7 @@ export class DashboardComponent implements OnInit {
 
     updateStats() {
         this.totalCases = this.cases.length;
-        this.avgScore = this.cases.length > 0
-            ? Math.round(this.cases.reduce((sum, c) => sum + (c.score || 0), 0) / this.cases.length)
-            : 0;
-
+        this.avgScore = this.cases.length > 0 ? Math.round(this.cases.reduce((sum, c) => sum + (c.score || 0), 0) / this.cases.length) : 0;
         const today = new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
         this.todayReviews = this.cases.filter(c => c.date === today).length;
     }
