@@ -476,7 +476,7 @@ export class QcModalComponent implements OnInit, OnDestroy {
 
     // --- Actions ---
     // --- Actions ---
-    generatePayload() {
+    generatePayload(QCStatus: string) {
         const score = this.currentCase.score;
         const statusLabel = score >= 90 ? 'Excellent' : score >= 75 ? 'Good' : score >= 60 ? 'Fair' : 'Poor';
 
@@ -501,6 +501,7 @@ export class QcModalComponent implements OnInit, OnDestroy {
             "affectedTeeth": this.currentCase.affectedTeeth || "",
             "Percentage": score,
             "Status": statusLabel,
+            "QCStatus" : QCStatus,
             "issues": {
                 "TreatmentPlan": {
                     "TreatmentPlanIncorrect": getIssueState('plan_incorrect', true),
@@ -586,7 +587,7 @@ export class QcModalComponent implements OnInit, OnDestroy {
         console.log('Capturing issue snapshot...');
        await this.capturePanelSnapshot();
 
-        const payload = this.generatePayload();
+        const payload = this.generatePayload('Draft');
         console.log('Save Draft Payload:', payload);
 
         this.caseService.saveCaseToApi(payload).subscribe({
@@ -605,7 +606,7 @@ export class QcModalComponent implements OnInit, OnDestroy {
         this.currentCase.status = 'Completed';
         this.caseService.saveCase(this.currentCase);
 
-        const payload = this.generatePayload();
+        const payload = this.generatePayload('QC Completed');
         console.log('Complete QC Payload:', payload);
 
         this.caseService.saveCaseToApi(payload).subscribe({
@@ -953,7 +954,7 @@ export class QcModalComponent implements OnInit, OnDestroy {
     });
 
     return new Promise((resolve) => {
-        canvas.toBlob(async (blob) => {
+        canvas.toBlob(async (blob:any) => {
             if (blob) {
                 const filename = `auto-snapshot-${Date.now()}.png`;
                 try {
