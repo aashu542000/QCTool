@@ -937,29 +937,81 @@ export class QcModalComponent implements OnInit, OnDestroy {
         this.handleFolderPathResponse(res);
     }
 
-    const element = this.snapshotTarget.nativeElement;
+    const element = this.snapshotTarget.nativeElement as HTMLElement;
 
-    const canvas = await html2canvas(element, {
+    // Clone the snapshot area so we can replace interactive controls (textarea) with static, wrapped previews
+    const clone = element.cloneNode(true) as HTMLElement;
+
+    try {
+        const originalTextareas = Array.from(element.querySelectorAll('textarea')) as HTMLTextAreaElement[];
+        const clonedTextareas = Array.from(clone.querySelectorAll('textarea')) as HTMLTextAreaElement[];
+
+        // Replace each cloned textarea with a div that mirrors its value and styles, ensuring wrapped text and no scrollbars
+        clonedTextareas.forEach((cloned, idx) => {
+            const orig = originalTextareas[idx];
+            const preview = document.createElement('div');
+            const value = (orig && orig.value !== undefined) ? orig.value : (cloned.textContent || '');
+            preview.textContent = value;
+
+            // Copy a few important computed styles from the original textarea
+            const cs = window.getComputedStyle(orig || cloned);
+            preview.style.whiteSpace = 'pre-wrap';
+            preview.style.overflowWrap = 'break-word';
+            preview.style.wordBreak = 'break-word';
+            preview.style.boxSizing = cs.boxSizing || 'border-box';
+            preview.style.width = cs.width && cs.width !== 'auto' ? cs.width : (orig ? orig.offsetWidth + 'px' : '100%');
+            preview.style.minHeight = cs.height && cs.height !== 'auto' ? cs.height : (orig ? orig.offsetHeight + 'px' : '80px');
+            preview.style.padding = cs.padding;
+            preview.style.margin = cs.margin;
+            preview.style.font = cs.font || `${cs.fontSize} ${cs.fontFamily}`;
+            preview.style.lineHeight = cs.lineHeight;
+            preview.style.color = cs.color;
+            preview.style.background = cs.backgroundColor || 'transparent';
+            preview.style.border = cs.border || 'none';
+            preview.style.borderRadius = cs.borderRadius || '4px';
+            preview.style.overflow = 'visible';
+            preview.style.resize = 'none';
+
+            // Replace the cloned textarea with the preview div
+            if (cloned.parentNode) cloned.parentNode.replaceChild(preview, cloned);
+        });
+    } catch (err) {
+        // If anything goes wrong, fall back to snapshotting the original element
+        console.warn('Textarea-to-preview replacement failed, proceeding with original element', err);
+    }
+
+    // Place cloned element off-screen to avoid layout shifts
+    clone.style.position = 'absolute';
+    clone.style.left = '-9999px';
+    clone.style.top = '0';
+    document.body.appendChild(clone);
+
+    // Use scrollHeight of the clone to capture full content
+    const targetHeight = (clone.scrollHeight || clone.offsetHeight || element.scrollHeight) as number;
+
+    const canvas = await html2canvas(clone, {
         backgroundColor: '#ffffff',
         scale: 2,
-        height: element.scrollHeight,
-        windowHeight: element.scrollHeight,
-        y: window.scrollY,
+        height: targetHeight,
+        windowHeight: targetHeight,
+        y: 0,
     });
 
+    // Clean up cloned node
+    document.body.removeChild(clone);
+
     return new Promise((resolve) => {
-        canvas.toBlob(async (blob:any) => {
+        canvas.toBlob(async (blob: any) => {
             if (blob) {
                 const filename = `auto-snapshot-${Date.now()}.png`;
                 try {
-                    // 3. Upload and return ONLY the URL
                     const url = await this.caseService.uploadToAzureBlob(
-                        blob, 
-                        this.currentFolderPath, 
-                        this.currentAzureCredentials, 
+                        blob,
+                        this.currentFolderPath,
+                        this.currentAzureCredentials,
                         filename
                     );
-                    this.currentCase.SnapshotUrl = url; // Store it separately
+                    this.currentCase.SnapshotUrl = url;
                     resolve(url);
                 } catch (err) {
                     console.error('Snapshot upload failed', err);

@@ -126,10 +126,9 @@
 .modal-body {
     flex: 1;
     overflow: hidden;
-    /* Prevent body scroll */
     padding: var(--space-16);
     display: grid;
-    grid-template-columns: minmax(400px, 1.8fr) minmax(280px, 1fr) minmax(250px, 1.2fr);
+    grid-template-columns: minmax(480px, 1.8fr) minmax(380px, 1fr) minmax(440px, 1.6fr);
     gap: var(--space-16);
     background: var(--color-surface);
     height: calc(100% - 60px);
