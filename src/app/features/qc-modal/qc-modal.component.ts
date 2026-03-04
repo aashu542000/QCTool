@@ -583,12 +583,8 @@ export class QcModalComponent implements OnInit, OnDestroy {
     async saveDraft() {
         this.currentCase.status = 'Draft';
         this.caseService.saveCase(this.currentCase);
-
-        console.log('Capturing issue snapshot...');
-       await this.capturePanelSnapshot();
-
+       await this.capturePanelSnapshot();       
         const payload = this.generatePayload('Draft');
-        console.log('Save Draft Payload:', payload);
 
         this.caseService.saveCaseToApi(payload).subscribe({
             next: (response: any) => {
@@ -602,13 +598,11 @@ export class QcModalComponent implements OnInit, OnDestroy {
         });
     }
 
-    completeQc() {
+    async completeQc() {
         this.currentCase.status = 'Completed';
         this.caseService.saveCase(this.currentCase);
-
+        await this.capturePanelSnapshot();
         const payload = this.generatePayload('QC Completed');
-        console.log('Complete QC Payload:', payload);
-
         this.caseService.saveCaseToApi(payload).subscribe({
             next: (response: any) => {
                 console.log('API Response:', response);
